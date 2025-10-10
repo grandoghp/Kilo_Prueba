@@ -1,30 +1,32 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { db } from '@/lib/db';
-import { z } from 'zod';
-
-const orderSchema = z.object({
-  userId: z.string(),
-  items: z.array(z.object({
-    gameId: z.string(),
-    quantity: z.number().int().min(1),
-    price: z.number().positive(),
-  })),
-});
+import { getServerSession } from 'next-auth';
+import { authOptions } from '@/lib/auth';
+import { db as prisma } from '@/lib/db';
 
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url);
-    const userId = searchParams.get('userId');
-    
-    if (!userId) {
+    const session = await getServerSession(authOptions);
+
+    if (!session?.user?.email) {
       return NextResponse.json(
-        { error: 'User ID is required' },
-        { status: 400 }
+        { error: 'Unauthorized' },
+        { status: 401 }
       );
     }
-    
-    const orders = await db.order.findMany({
-      where: { userId },
+
+    const user = await prisma.user.findUnique({
+      where: { email: session.user.email },
+    });
+
+    if (!user) {
+      return NextResponse.json(
+        { error: 'User not found' },
+        { status: 404 }
+      );
+    }
+
+    const orders = await prisma.order.findMany({
+      where: { userId: user.id },
       include: {
         items: {
           include: {
@@ -34,69 +36,12 @@ export async function GET(request: NextRequest) {
       },
       orderBy: { createdAt: 'desc' },
     });
-    
+
     return NextResponse.json(orders);
   } catch (error) {
     console.error('Error fetching orders:', error);
     return NextResponse.json(
       { error: 'Failed to fetch orders' },
-      { status: 500 }
-    );
-  }
-}
-
-export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json();
-    const validatedData = orderSchema.parse(body);
-    
-    const total = validatedData.items.reduce(
-      (sum, item) => sum + item.price * item.quantity,
-      0
-    );
-    
-    const order = await db.order.create({
-      data: {
-        userId: validatedData.userId,
-        total,
-        status: 'pending',
-        items: {
-          create: validatedData.items.map(item => ({
-            gameId: item.gameId,
-            quantity: item.quantity,
-            price: item.price,
-          })),
-        },
-      },
-      include: {
-        items: {
-          include: {
-            game: true,
-          },
-        },
-      },
-    });
-    
-    await db.cartItem.deleteMany({
-      where: {
-        userId: validatedData.userId,
-        gameId: {
-          in: validatedData.items.map(item => item.gameId),
-        },
-      },
-    });
-    
-    return NextResponse.json(order, { status: 201 });
-  } catch (error) {
-    console.error('Error creating order:', error);
-    if (error instanceof z.ZodError) {
-      return NextResponse.json(
-        { error: 'Invalid data', details: error.errors },
-        { status: 400 }
-      );
-    }
-    return NextResponse.json(
-      { error: 'Failed to create order' },
       { status: 500 }
     );
   }

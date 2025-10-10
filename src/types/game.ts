@@ -11,6 +11,12 @@ export interface Game {
   stock: number;
   createdAt: string;
   updatedAt: string;
+  // Nuevos campos
+  videoUrl?: string;
+  specs?: string;
+  developer?: string;
+  publisher?: string;
+  reviews?: Review[];
 }
 
 export interface CartItem {
@@ -46,4 +52,15 @@ export interface User {
   name?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface Review {
+  id: string;
+  userId: string;
+  gameId: string;
+  rating: number;
+  comment?: string;
+  createdAt: string;
+  updatedAt: string;
+  user: User;
 }

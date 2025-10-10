@@ -1,13 +1,16 @@
 'use client';
 
+import { useSession } from 'next-auth/react';
 import { useCart } from '@/hooks/useCart';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { X, Plus, Minus, ShoppingCart, Trash2 } from 'lucide-react';
+import { X, Plus, Minus, ShoppingCart, Trash2, LogIn } from 'lucide-react';
+import Link from 'next/link';
 
 export function CartSidebar() {
+  const { data: session } = useSession();
   const {
     items,
     isCartOpen,
@@ -20,31 +23,23 @@ export function CartSidebar() {
 
   const handleCheckout = async () => {
     try {
-      const response = await fetch('/api/orders', {
+      const response = await fetch('/api/checkout', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          userId: 'demo-user',
-          items: items.map(item => ({
-            gameId: item.gameId,
-            quantity: item.quantity,
-            price: item.game.price,
-          })),
-        }),
       });
 
       if (response.ok) {
-        clearCart();
-        closeCart();
-        alert('Order placed successfully!');
+        const { url } = await response.json();
+        window.location.href = url; // Redirect to Stripe
       } else {
-        alert('Failed to place order');
+        const error = await response.json();
+        alert(error.error || 'Failed to create checkout session');
       }
     } catch (error) {
-      console.error('Error placing order:', error);
-      alert('Error placing order');
+      console.error('Error creating checkout session:', error);
+      alert('Error creating checkout session');
     }
   };
 
@@ -86,7 +81,15 @@ export function CartSidebar() {
 
           {/* Cart Items */}
           <ScrollArea className="flex-1 p-6">
-            {items.length === 0 ? (
+            {!session?.user ? (
+              <div className="text-center py-12">
+                <LogIn className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
+                <p className="text-lg text-muted-foreground mb-4">Please sign in to view your cart</p>
+                <Button asChild>
+                  <Link href="/auth/signin">Sign In</Link>
+                </Button>
+              </div>
+            ) : items.length === 0 ? (
               <div className="text-center py-12">
                 <ShoppingCart className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
                 <p className="text-lg text-muted-foreground">Your cart is empty</p>
@@ -153,7 +156,7 @@ export function CartSidebar() {
           </ScrollArea>
 
           {/* Footer */}
-          {items.length > 0 && (
+          {session?.user && items.length > 0 && (
             <div className="border-t p-6 space-y-4">
               <div className="flex items-center justify-between">
                 <span className="text-lg font-semibold">Total:</span>

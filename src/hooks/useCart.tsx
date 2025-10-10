@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { useSession } from 'next-auth/react';
 import { CartItem, Game } from '@/types/game';
 
 interface CartContextType {
@@ -22,11 +23,14 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 export function CartProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<CartItem[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
-  const [userId] = useState('demo-user'); // Demo user ID
+  const { data: session } = useSession();
+  const userId = (session?.user as any)?.id || 'demo-user'; // Fallback to demo-user if not logged in
 
   useEffect(() => {
-    fetchCart();
-  }, []);
+    if (userId) {
+      fetchCart();
+    }
+  }, [userId]);
 
   const fetchCart = async () => {
     try {
